@@ -9,46 +9,70 @@ headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
+# حط الرابط المستهدف هنا
+base_url = "https://bekastore6.com/catalogue/"
+
 while True:
-    # تحديد رابط الصفحة بناء على رقم الصفحة
     if page == 1:
-        url = "https://oxytech.ma/shop/"
+        url = base_url
     else:
-        url = f"https://oxytech.ma/shop/page/{page}/"
-        
+        # التعامل مع ترقيم الصفحات العام
+        if "shopify" in base_url:
+            url = f"{base_url}?page={page}"
+        else:
+            url = f"{base_url}page/{page}/"
+            
     print(f"Scraping page {page}...")
     response = requests.get(url, headers=headers)
     
-    # إذا كانت الصفحة ما كايناش أو عطات خطأ (بحال 404)، حبس البوكل
     if response.status_code != 200:
-        print(f"Reached the end or page not found (Status: {response.status_code})")
         break
         
     soup = BeautifulSoup(response.text, "html.parser")
     
-    titles = soup.find_all(class_="wd-entities-title")
-    prices = soup.find_all(class_="woocommerce-Price-amount amount")
+    # ---------------------------------------------------------
+    # بحث ذكي وعام عن العناوين والأثمنة بدون التقيد بكلاس واحد محدد
+    # ---------------------------------------------------------
+    titles = []
+    prices = []
     
-    # إذا ما تلقاش حتى منتج في الصفحة، حبس البوكل
-    if not titles:
-        print("No more products found.")
+    # محاولة البحث عن العناوين بأساليب مختلفة (WooCommerce أو عناوين عامة)
+    for tag in ["h2", "h3", "h1"]:
+        found = soup.find_all(tag, class_=lambda x: x and ('title' in x or 'product' in x))
+        if found:
+            titles = found
+            break
+            
+    # إذا لم يتم العثور عليها بالطريقة السابقة، نبحث بأي عنصر يحتوي على كلاس price أو amount للثمن
+    for tag in ["span", "div", "p"]:
+        found = soup.find_all(tag, class_=lambda x: x and ('price' in x or 'amount' in x))
+        if found:
+            prices = found
+            break
+
+    if not titles or not prices:
+        print("No more products found or structure not matched.")
         break
         
-    # جمع العناوين والأثمنة ديال هذه الصفحة
     page_products = 0
-    for title_el, price_el in zip(titles, prices):
-        title = title_el.text.strip()
-        price = price_el.text.strip()
-        products.append([title, price])
-        page_products += 1
-        
+    # أخذ الأقل عدداً لضمان التطابق بين العنوان والثمن
+    limit = min(len(titles), len(prices))
+    for i in range(limit):
+        title = titles[i].text.strip()
+        price = prices[i].text.strip()
+        if title and price:
+            products.append([title, price])
+            page_products += 1
+            
     print(f"Found {page_products} products on page {page}.")
     page += 1
+    if page > 50: # حماية لتفادي اللانهائية
+        break
 
-# حفظ جميع المنتجات من كل الصفحات في ملف products.csv
+# حفظ النتائج
 with open("products.csv", "w", newline="", encoding="utf-8") as f:
     writer = csv.writer(f)
     writer.writerow(["Product Name", "Price"])
     writer.writerows(products)
     
-print(f"Successfully scraped a total of {len(products)} products from all pages!")
+print(f"Successfully scraped a total of {len(products)} products!")
