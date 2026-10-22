@@ -1,0 +1,25 @@
+import csv
+import requests
+from bs4 import BeautifulSoup
+
+url = "https://example-store.com/products"
+headers = {
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+}
+response = requests.get(url, headers=headers)
+if response.status_code == 200:
+    soup = BeautifulSoup(response.text, "html.parser")
+    products = []
+    items = soup.select(".product-item")
+    for item in items:
+        title_el = item.select_one(".product-title")
+        price_el = item.select_one(".product-price")
+        if title_el and price_el:
+            title = title_el.text.strip()
+            price = price_el.text.strip()
+            products.append([title, price])
+    with open("products.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Product Name", "Price"])
+        writer.writerows(products)
+    print("Data saved successfully.")
