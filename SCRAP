@@ -2,25 +2,39 @@ import csv
 import requests
 from bs4 import BeautifulSoup
 
+# حط هنا رابط متجر أو موقع المنتجات اللي بغيتي
 url = "https://oxytech.ma/shop/"
+
 headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36"
+    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
+
 response = requests.get(url, headers=headers)
+
 if response.status_code == 200:
     soup = BeautifulSoup(response.text, "html.parser")
     products = []
-    items = soup.select(".product-item")
+    
+    # (ملاحظة): هنا كتغير دوك الكلاسات بلي كلاس الحقيقيين ديال الموقع المستهدف
+    items = soup.find_all("div", class_="product-item") 
+    
     for item in items:
-        title_el = item.select_one(".product-title")
-        price_el = item.select_one(".product-price")
+        # استخراج العنوان
+        title_el = item.find("h2", class_="product-title")
+        # استخراج السعر
+        price_el = item.find("span", class_="price")
+        
         if title_el and price_el:
             title = title_el.text.strip()
             price = price_el.text.strip()
             products.append([title, price])
+            
+    # حفظ النتائج في ملف products.csv أوتوماتيكياً
     with open("products.csv", "w", newline="", encoding="utf-8") as f:
         writer = csv.writer(f)
         writer.writerow(["Product Name", "Price"])
         writer.writerows(products)
+        
     print("Data saved successfully.")
-
+else:
+    print(f"Failed to fetch page, Status Code: {response.status_code}")
