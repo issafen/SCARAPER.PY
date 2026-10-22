@@ -10,7 +10,7 @@ headers = {
 }
 
 # حط الرابط المستهدف هنا
-base_url = "https://bekastore6.com/catalogue/"
+base_url = "https://bekastore6.com/"
 
 while True:
     if page == 1:
