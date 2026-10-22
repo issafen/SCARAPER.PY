@@ -2,7 +2,7 @@ import csv
 import requests
 from bs4 import BeautifulSoup
 
-# حط هنا رابط متجر أو موقع المنتجات اللي بغيتي
+# حط هنا الرابط ديال المتجر (مثلا موقعك أو أي موقع آخر كيخدم بـ WoodMart)
 url = "https://oxytech.ma/shop/"
 
 headers = {
@@ -15,19 +15,17 @@ if response.status_code == 200:
     soup = BeautifulSoup(response.text, "html.parser")
     products = []
     
-    # (ملاحظة): هنا كتغير دوك الكلاسات بلي كلاس الحقيقيين ديال الموقع المستهدف
-    items = soup.find_all("div", class_="product-item") 
+    # في الغالب في ثيمات WooCommerce، المنتج كيكون داخل عنصر بحال product أو div عنده كلاسات مشابهة
+    # غنستعملو BeautifulSoup للبحث عن العناوين والأثمنة مباشرة بفضل الكلاسات اللي دكيتي
     
-    for item in items:
-        # استخراج العنوان
-        title_el = item.find("h2", class_="product-title")
-        # استخراج السعر
-        price_el = item.find("span", class_="price")
-        
-        if title_el and price_el:
-            title = title_el.text.strip()
-            price = price_el.text.strip()
-            products.append([title, price])
+    titles = soup.find_all(class_="wd-entities-title")
+    prices = soup.find_all(class_="woocommerce-Price-amount amount")
+    
+    # دمج العناوين مع الأثمنة بناء على الترتيب في الصفحة
+    for title_el, price_el in zip(titles, prices):
+        title = title_el.text.strip()
+        price = price_el.text.strip()
+        products.append([title, price])
             
     # حفظ النتائج في ملف products.csv أوتوماتيكياً
     with open("products.csv", "w", newline="", encoding="utf-8") as f:
@@ -35,6 +33,6 @@ if response.status_code == 200:
         writer.writerow(["Product Name", "Price"])
         writer.writerows(products)
         
-    print("Data saved successfully.")
+    print(f"Successfully scraped {len(products)} products and saved to products.csv.")
 else:
     print(f"Failed to fetch page, Status Code: {response.status_code}")
