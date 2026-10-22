@@ -2,37 +2,53 @@ import csv
 import requests
 from bs4 import BeautifulSoup
 
-# حط هنا الرابط ديال المتجر (مثلا موقعك أو أي موقع آخر كيخدم بـ WoodMart)
-url = "https://oxytech.ma/shop/"
+products = []
+page = 1
 
 headers = {
     "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
 }
 
-response = requests.get(url, headers=headers)
-
-if response.status_code == 200:
-    soup = BeautifulSoup(response.text, "html.parser")
-    products = []
+while True:
+    # تحديد رابط الصفحة بناء على رقم الصفحة
+    if page == 1:
+        url = "https://oxytech.ma/shop/"
+    else:
+        url = f"https://oxytech.ma/shop/page/{page}/"
+        
+    print(f"Scraping page {page}...")
+    response = requests.get(url, headers=headers)
     
-    # في الغالب في ثيمات WooCommerce، المنتج كيكون داخل عنصر بحال product أو div عنده كلاسات مشابهة
-    # غنستعملو BeautifulSoup للبحث عن العناوين والأثمنة مباشرة بفضل الكلاسات اللي دكيتي
+    # إذا كانت الصفحة ما كايناش أو عطات خطأ (بحال 404)، حبس البوكل
+    if response.status_code != 200:
+        print(f"Reached the end or page not found (Status: {response.status_code})")
+        break
+        
+    soup = BeautifulSoup(response.text, "html.parser")
     
     titles = soup.find_all(class_="wd-entities-title")
     prices = soup.find_all(class_="woocommerce-Price-amount amount")
     
-    # دمج العناوين مع الأثمنة بناء على الترتيب في الصفحة
+    # إذا ما تلقاش حتى منتج في الصفحة، حبس البوكل
+    if not titles:
+        print("No more products found.")
+        break
+        
+    # جمع العناوين والأثمنة ديال هذه الصفحة
+    page_products = 0
     for title_el, price_el in zip(titles, prices):
         title = title_el.text.strip()
         price = price_el.text.strip()
         products.append([title, price])
-            
-    # حفظ النتائج في ملف products.csv أوتوماتيكياً
-    with open("products.csv", "w", newline="", encoding="utf-8") as f:
-        writer = csv.writer(f)
-        writer.writerow(["Product Name", "Price"])
-        writer.writerows(products)
+        page_products += 1
         
-    print(f"Successfully scraped {len(products)} products and saved to products.csv.")
-else:
-    print(f"Failed to fetch page, Status Code: {response.status_code}")
+    print(f"Found {page_products} products on page {page}.")
+    page += 1
+
+# حفظ جميع المنتجات من كل الصفحات في ملف products.csv
+with open("products.csv", "w", newline="", encoding="utf-8") as f:
+    writer = csv.writer(f)
+    writer.writerow(["Product Name", "Price"])
+    writer.writerows(products)
+    
+print(f"Successfully scraped a total of {len(products)} products from all pages!")
