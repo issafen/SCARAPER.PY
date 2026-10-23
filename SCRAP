@@ -1,78 +1,66 @@
 import csv
-import requests
-from bs4 import BeautifulSoup
+from playwright.sync_api import sync_playwright
 
-products = []
-page = 1
-
-headers = {
-    "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
-}
-
-# حط الرابط المستهدف هنا
-base_url = "https://bekastore6.com/"
-
-while True:
-    if page == 1:
-        url = base_url
-    else:
-        # التعامل مع ترقيم الصفحات العام
-        if "shopify" in base_url:
-            url = f"{base_url}?page={page}"
-        else:
-            url = f"{base_url}page/{page}/"
-            
-    print(f"Scraping page {page}...")
-    response = requests.get(url, headers=headers)
+def run_scraper():
+    products = []
     
-    if response.status_code != 200:
-        break
+    with sync_playwright() as p:
+        # تشغيل المتصفح في الخلفية (Headless mode)
+        browser = p.chromium.launch(headless=True)
+        page = browser.new_page()
         
-    soup = BeautifulSoup(response.text, "html.parser")
-    
-    # ---------------------------------------------------------
-    # بحث ذكي وعام عن العناوين والأثمنة بدون التقيد بكلاس واحد محدد
-    # ---------------------------------------------------------
-    titles = []
-    prices = []
-    
-    # محاولة البحث عن العناوين بأساليب مختلفة (WooCommerce أو عناوين عامة)
-    for tag in ["h2", "h3", "h1"]:
-        found = soup.find_all(tag, class_=lambda x: x and ('title' in x or 'product' in x))
-        if found:
-            titles = found
-            break
-            
-    # إذا لم يتم العثور عليها بالطريقة السابقة، نبحث بأي عنصر يحتوي على كلاس price أو amount للثمن
-    for tag in ["span", "div", "p"]:
-        found = soup.find_all(tag, class_=lambda x: x and ('price' in x or 'amount' in x))
-        if found:
-            prices = found
-            break
-
-    if not titles or not prices:
-        print("No more products found or structure not matched.")
-        break
+        url = "https://bekastore6.com/catalogue/"
+        print(f"Opening {url}...")
+        page.goto(url, timeout=60000)
         
-    page_products = 0
-    # أخذ الأقل عدداً لضمان التطابق بين العنوان والثمن
-    limit = min(len(titles), len(prices))
-    for i in range(limit):
-        title = titles[i].text.strip()
-        price = prices[i].text.strip()
-        if title and price:
-            products.append([title, price])
-            page_products += 1
+        # محاكاة التمرير لأسفل الصفحة لترواض وتحميل جميع المنتجات (Infinite Scroll / Load More)
+        last_height = page.evaluate("document.body.scrollHeight")
+        
+        while True:
+            # الهبوط إلى أسفل الصفحة
+            page.evaluate("window.scrollTo(0, document.body.scrollHeight);")
+            page.wait_for_timeout(3000) # انتظار 3 ثواني باش يتحملو المنتجات الجداد
             
-    print(f"Found {page_products} products on page {page}.")
-    page += 1
-    if page > 50: # حماية لتفادي اللانهائية
-        break
+            # فحص واش الصفحة تزادت في الطول (بمعنى أن منتجات جداد بانوا)
+            new_height = page.evaluate("document.body.scrollHeight")
+            if new_height == last_height:
+                # محاولة البحث عن زر "Load More" والنقر عليه إذا وجد
+                try:
+                    load_more_btn = page.locator("text=Load More") # أو كلاس الزر إذا كان معروفاً
+                    if load_more_btn.is_visible():
+                        load_more_btn.click()
+                        page.wait_for_timeout(3000)
+                        continue
+                except:
+                    pass
+                
+                print("Reached the bottom of the page or no more products.")
+                break
+            last_height = new_height
+            print("Scrolling down to load more products...")
 
-# حفظ النتائج
-with open("products.csv", "w", newline="", encoding="utf-8") as f:
-    writer = csv.writer(f)
-    writer.writerow(["Product Name", "Price"])
-    writer.writerows(products)
-    
-print(f"Successfully scraped a total of {len(products)} products!")
+        # استخراج العناوين والأسعار بعد تحميل الصفحة كاملاً
+        # ملاحظة: استبدل الكلاسات أدناه بالكلاسات الخاصة بـ bekastore6.com إذا كانت تختلف عن WoodMart
+        titles = page.locator(".wd-entities-title, .product-title, h2").all_text_contents()
+        prices = page.locator(".woocommerce-Price-amount, .price").all_text_contents()
+        
+        # تنظيف وتنسيق البيانات
+        limit = min(len(titles), len(prices))
+        for i in range(limit):
+            title = titles[i].strip()
+            price = prices[i].strip()
+            if title and price:
+                products.append([title, price])
+                
+        browser.close()
+
+    # حفظ النتائج في ملف products.csv
+    with open("products.csv", "w", newline="", encoding="utf-8") as f:
+        writer = csv.writer(f)
+        writer.writerow(["Product Name", "Price"])
+        writer.writerows(products)
+        
+    print(f"Successfully scraped a total of {len(products)} products using Playwright!")
+
+if __name__ == "__main__":
+    run_scraper()
